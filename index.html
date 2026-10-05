@@ -57,6 +57,9 @@
         .btn-tile i { font-size: 1.5rem; margin-bottom: 5px; }
 
         .bg-csv { background-color: #4666ff; color: white; }
+        .bg-excel { background-color: #217346; color: white; }
+        #systemConsole { background: #101418; color: #9fe8a9; font-family: 'Courier New', monospace; font-size: 0.78rem; max-height: 140px; overflow-y: auto; border-radius: 6px; padding: 10px 14px; text-align: left; }
+        #systemConsole div { white-space: pre-wrap; word-break: break-all; }
         .bg-pdf { background-color: #dc3545; color: white; }
         .bg-word { background-color: #000000; color: white; }
         .bg-email { background-color: #ffffff; color: #dc3545; border: 1px solid #dc3545; }
@@ -243,6 +246,11 @@
                     </button>
                 </div>
                 <div class="col-6 col-md-2">
+                    <button class="btn-tile bg-excel" onclick="downloadExcel()">
+                        <i class="bi bi-file-earmark-excel-fill"></i> Excel Report
+                    </button>
+                </div>
+                <div class="col-6 col-md-2">
                     <button class="btn-tile bg-pdf" onclick="generateHashPDF()">
                         <i class="bi bi-file-earmark-pdf-fill"></i> Hash PDF
                     </button>
@@ -287,14 +295,21 @@
                             <tr class="table-header">
                                 <th width="5%" class="ps-4"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
                                 <th width="5%">#</th>
-                                <th width="30%">Filename</th>
-                                <th width="20%">MD5 Hash</th>
-                                <th width="40%">SHA-256 (Section 63 BSA Compliant)</th>
+                                <th width="25%">Filename</th>
+                                <th width="15%">MD5 Hash</th>
+                                <th width="30%">SHA-256 (Section 63 BSA Compliant)</th>
+                                <th width="20%">SHA-3-256 (FIPS 202)</th>
                             </tr>
                         </thead>
                         <tbody id="hashTableBody" style="background: white;"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- SYSTEM CONSOLE -->
+            <div class="mt-3">
+                <div class="small fw-bold text-secondary mb-1"><i class="bi bi-terminal"></i> System Console</div>
+                <div id="systemConsole"><div>[ready] Awaiting evidence files.</div></div>
             </div>
 
         </div>
@@ -460,6 +475,8 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js"></script>
     
     <script>
         const fileInput = document.getElementById('fileInput');
@@ -497,6 +514,7 @@
                         </td>
                         <td class="hash-font md5">Calculating...</td>
                         <td class="hash-font sha256">Calculating...</td>
+                        <td class="hash-font sha3">Calculating...</td>
                     </tr>
                 `);
                 fileQueue.push({ file, rowId });
@@ -519,6 +537,9 @@
                     if (row) {
                         row.querySelector('.md5').innerText = CryptoJS.MD5(wordArray).toString();
                         row.querySelector('.sha256').innerText = CryptoJS.SHA256(wordArray).toString();
+                        const sha3 = sha3_256(e.target.result);
+                        row.querySelector('.sha3').innerText = sha3;
+                        logConsole(`SHA-3-256 calculated for ${file.name}: ${sha3}`);
                     }
                     processQueue();
                 }, 50);
@@ -613,6 +634,7 @@
                 const text = await readFile(files[i]);
                 const emailData = parseEml(text);
                 const sha256 = await calculateSHA256(files[i]);
+                const sha3 = await calculateSHA3(files[i]);
 
                 // HEADER WITH WRAPPED FILENAME
                 doc.setFillColor(0, 51, 102);
@@ -646,7 +668,8 @@
                         ['Message-ID', emailData.messageId],
                         ['Originating IP', emailData.serverIP],
                         ['DKIM Status', emailData.dkim],
-                        ['SHA-256 Hash', sha256]
+                        ['SHA-256 Hash', sha256],
+                        ['SHA-3-256 Hash', sha3]
                     ],
                     theme: 'grid',
                     headStyles: { 
@@ -715,7 +738,8 @@
                     rows.push([
                         cells[1].innerText,
                         cells[2].innerText,
-                        cells[4].innerText
+                        cells[4].innerText,
+                        cells[5].innerText
                     ]);
                 }
             });
@@ -727,7 +751,7 @@
 
             doc.autoTable({
                 startY: 70,
-                head: [['#', 'Filename', 'SHA-256']],
+                head: [['#', 'Filename', 'SHA-256', 'SHA-3-256']],
                 body: rows,
                 theme: 'grid',
                 headStyles: { 
@@ -741,8 +765,9 @@
                 },
                 columnStyles: {
                     0: { cellWidth: 40 },
-                    1: { cellWidth: 300 },
-                    2: { cellWidth: 450, font: 'courier' }
+                    1: { cellWidth: 230 },
+                    2: { cellWidth: 260, font: 'courier' },
+                    3: { cellWidth: 260, font: 'courier' }
                 }
             });
 
@@ -782,6 +807,13 @@
                             alignment: AlignmentType.CENTER
                         })],
                         shading: { fill: "003366" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "SHA-3-256", bold: true, color: "FFFFFF" })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        shading: { fill: "003366" }
                     })
                 ]
             }));
@@ -795,6 +827,9 @@
                             new TableCell({ children: [new Paragraph(cells[2].innerText)] }),
                             new TableCell({ children: [new Paragraph({ 
                                 children: [new TextRun({ text: cells[4].innerText, font: "Courier New", size: 18 })]
+                            })] }),
+                            new TableCell({ children: [new Paragraph({ 
+                                children: [new TextRun({ text: cells[5].innerText, font: "Courier New", size: 18 })]
                             })] })
                         ]
                     }));
@@ -837,7 +872,7 @@
 
         // ===== DOWNLOAD CSV =====
         function downloadSelectedCSV() {
-            let csv = "#,Subject,From,To,Date,Originating IP,DKIM,SHA-256\n";
+            let csv = "#,Subject,From,To,Date,Originating IP,DKIM,SHA-256,SHA-3-256\n";
             
             let counter = 1;
             const promises = [];
@@ -848,7 +883,7 @@
                     promises.push(
                         readFile(tr.fileData).then(text => {
                             const eml = parseEml(text);
-                            return `${counter++},"${eml.subject}","${eml.from}","${eml.to}","${eml.date}","${eml.serverIP}","${eml.dkim}","${cells[4].innerText}"\n`;
+                            return `${counter++},"${eml.subject}","${eml.from}","${eml.to}","${eml.date}","${eml.serverIP}","${eml.dkim}","${cells[4].innerText}","${cells[5].innerText}"\n`;
                         })
                     );
                 }
@@ -864,7 +899,46 @@
             });
         }
 
+        // ===== EXCEL EXPORT =====
+        function downloadExcel() {
+            if (typeof XLSX === 'undefined') {
+                alert("Excel library loading...");
+                return;
+            }
+            const data = [['#', 'Filename', 'MD5', 'SHA-256', 'SHA-3-256']];
+            document.querySelectorAll("#hashTableBody tr").forEach(tr => {
+                if (tr.querySelector('input').checked) {
+                    const cells = tr.querySelectorAll('td');
+                    data.push([
+                        cells[1].innerText,
+                        cells[2].innerText,
+                        cells[3].innerText,
+                        cells[4].innerText,
+                        cells[5].innerText
+                    ]);
+                }
+            });
+            if (data.length === 1) {
+                alert("Please select files to include in report.");
+                return;
+            }
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Hashes");
+            XLSX.writeFile(wb, "Hash_Report.xlsx");
+            logConsole(`Excel report exported with ${data.length - 1} file(s).`);
+        }
+
         // ===== UTILITY FUNCTIONS =====
+        function logConsole(message) {
+            const panel = document.getElementById('systemConsole');
+            if (!panel) return;
+            const line = document.createElement('div');
+            line.textContent = `[${new Date().toLocaleTimeString('en-IN')}] ${message}`;
+            panel.appendChild(line);
+            panel.scrollTop = panel.scrollHeight;
+        }
+
         function getSelectedEmlFiles() {
             const files = [];
             document.querySelectorAll("#hashTableBody tr").forEach(tr => {
@@ -890,6 +964,14 @@
                     const wordArray = CryptoJS.lib.WordArray.create(e.target.result);
                     resolve(CryptoJS.SHA256(wordArray).toString());
                 };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function calculateSHA3(file) {
+            return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(sha3_256(e.target.result));
                 reader.readAsArrayBuffer(file);
             });
         }
