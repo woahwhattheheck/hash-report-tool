@@ -266,6 +266,11 @@
                     </button>
                 </div>
                 <div class="col-6 col-md-2">
+                    <button class="btn-tile bg-csv" onclick="downloadEmailCSV()">
+                        <i class="bi bi-envelope-arrow-down"></i> Email CSV
+                    </button>
+                </div>
+                <div class="col-6 col-md-2">
                     <button class="btn-tile bg-guide" onclick="showGmailGuide()">
                         <i class="bi bi-info-circle-fill"></i> Guide
                     </button>
@@ -862,36 +867,81 @@
                 }]
             });
 
-            Packer.toBlob(doc).then(blob => {
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = "Hash_Report.docx";
-                a.click();
-            });
+           // ===== DOWNLOAD CSV =====
+        function csvCell(value) {
+            let text = String(value ?? '');
+            if (/^[=+\-@]/.test(text)) text = `'${text}`;
+            return `"${text.replace(/"/g, '""')}"`;
         }
 
-        // ===== DOWNLOAD CSV =====
+        function downloadCsvFile(csv, filename) {
+            const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
         function downloadSelectedCSV() {
-            let csv = "#,Subject,From,To,Date,Originating IP,DKIM,SHA-256,SHA-3-256\n";
-            
-            let counter = 1;
-            const promises = [];
-            
+            const rows = [['#', 'Filename', 'MD5', 'SHA-256', 'SHA-3-256']];
             document.querySelectorAll("#hashTableBody tr").forEach(tr => {
-                if (tr.querySelector('input').checked && tr.fileData && tr.fileData.name.toLowerCase().endsWith('.eml')) {
+                if (tr.querySelector('input').checked) {
                     const cells = tr.querySelectorAll('td');
-                    promises.push(
-                        readFile(tr.fileData).then(text => {
-                            const eml = parseEml(text);
-                            return `${counter++},"${eml.subject}","${eml.from}","${eml.to}","${eml.date}","${eml.serverIP}","${eml.dkim}","${cells[4].innerText}","${cells[5].innerText}"\n`;
-                        })
-                    );
+                    rows.push([
+                        cells[1].innerText,
+                        tr.fileData?.name || cells[2].innerText,
+                        cells[3].innerText,
+                        cells[4].innerText,
+                        cells[5].innerText
+                    ]);
                 }
             });
 
-            Promise.all(promises).then(rows => {
-                csv += rows.join('');
-                const blob = new Blob([csv], { type: 'text/csv' });
+            if (rows.length === 1) {
+                alert("Please select files to include in report.");
+                return;
+            }
+
+            const csv = rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+            downloadCsvFile(csv, "Hash_Report.csv");
+            logConsole(`CSV report exported with ${rows.length - 1} file(s).`);
+        }
+
+        async function downloadEmailCSV() {
+            const selectedRows = Array.from(document.querySelectorAll("#hashTableBody tr")).filter(tr =>
+                tr.querySelector('input').checked &&
+                tr.fileData?.name.toLowerCase().endsWith(".eml")
+            );
+
+            if (selectedRows.length === 0) {
+                alert("Please select .EML files from the table.");
+                return;
+            }
+
+            const rows = await Promise.all(selectedRows.map(async (tr, index) => {
+                const cells = tr.querySelectorAll('td');
+                const eml = parseEml(await readFile(tr.fileData));
+                return [
+                    index + 1,
+                    eml.subject,
+                    eml.from,
+                    eml.to,
+                    eml.date,
+                    eml.serverIP,
+                    eml.dkim,
+                    cells[4].innerText,
+                    cells[5].innerText
+                ];
+            }));
+            const header = ['#', 'Subject', 'From', 'To', 'Date', 'Originating IP', 'DKIM', 'SHA-256', 'SHA-3-256'];
+            const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+            downloadCsvFile(csv, "Email_Report.csv");
+            logConsole(`Email CSV exported with ${rows.length} file(s).`);
+        }
+
+b = new Blob([csv], { type: 'text/csv' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
                 a.download = "Email_Report.csv";
