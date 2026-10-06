@@ -867,7 +867,15 @@
                 }]
             });
 
-           // ===== DOWNLOAD CSV =====
+            Packer.toBlob(doc).then(blob => {
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = "Hash_Report.docx";
+                a.click();
+            });
+        }
+
+        // ===== DOWNLOAD CSV =====
         function csvCell(value) {
             let text = String(value ?? '');
             if (/^[=+\-@]/.test(text)) text = `'${text}`;
@@ -939,14 +947,6 @@
             const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
             downloadCsvFile(csv, "Email_Report.csv");
             logConsole(`Email CSV exported with ${rows.length} file(s).`);
-        }
-
-b = new Blob([csv], { type: 'text/csv' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = "Email_Report.csv";
-                a.click();
-            });
         }
 
         // ===== EXCEL EXPORT =====
