@@ -930,10 +930,7 @@
             });
 
             Packer.toBlob(doc).then(blob => {
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = "Hash_Report.docx";
-                a.click();
+                downloadBlobFile(blob, "Hash_Report.docx");
             });
         }
 
@@ -967,14 +964,13 @@
             return `"${text.replace(/"/g, '""')}"`;
         }
 
-        function downloadCsvFile(csv, filename) {
-            const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+        function downloadBlobFile(blob, filename) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
             // A browser can begin the actual file download after the click returns.
-            // Keep the URL alive briefly so CSV export works across browsers.
+            // Keep the URL alive briefly so exports work across browsers.
             document.body.appendChild(a);
             try {
                 a.click();
@@ -982,6 +978,11 @@
                 a.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 30_000);
             }
+        }
+
+        function downloadCsvFile(csv, filename) {
+            const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+            downloadBlobFile(blob, filename);
         }
 
         function downloadSelectedCSV() {
