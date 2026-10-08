@@ -514,7 +514,7 @@
                         <td class="ps-4"><input type="checkbox" name="fileSelect" checked></td>
                         <td>${rowCount}</td>
                         <td class="fw-bold text-dark">
-                            ${file.name} 
+                            <span class="evidence-filename"></span> 
                             ${isEml ? '<span class="badge bg-danger text-white ms-2">EMAIL</span>' : ''}
                         </td>
                         <td class="hash-font md5">Calculating...</td>
@@ -522,6 +522,8 @@
                         <td class="hash-font sha3">Calculating...</td>
                     </tr>
                 `);
+                // Treat local evidence filenames as text, never parsed HTML.
+                document.getElementById(rowId).querySelector('.evidence-filename').textContent = file.name;
                 fileQueue.push({ file, rowId });
             });
             if (!isProcessing) processQueue();
@@ -655,6 +657,7 @@
             });
 
             // PROCESS EACH EMAIL
+            try {
             for (let i = 0; i < files.length; i++) {
                 doc.addPage();
                 
@@ -743,6 +746,11 @@
                 doc.text("Forensic Examiner Signature", 15, pageHeight - 5);
             }
 
+            } catch (error) {
+                alert("Email report was not generated: an evidence file could not be read or processed.");
+                logConsole("Email report cancelled after an evidence read or processing error.");
+                return;
+            }
             doc.save("Forensic_Email_Report.pdf", { compress: true });
         }
 
@@ -978,7 +986,9 @@
             }
             if (!selectedHashRowsReady(selectedRows)) return;
 
-            const rows = await Promise.all(selectedRows.map(async (tr, index) => {
+            let rows;
+            try {
+            rows = await Promise.all(selectedRows.map(async (tr, index) => {
                 const cells = tr.querySelectorAll('td');
                 const eml = parseEml(await readFile(tr.fileData));
                 return [
@@ -993,6 +1003,11 @@
                     cells[5].innerText
                 ];
             }));
+            } catch (error) {
+                alert("Email CSV was not generated: an evidence file could not be read or processed.");
+                logConsole("Email CSV cancelled after an evidence read or processing error.");
+                return;
+            }
             const header = ['#', 'Subject', 'From', 'To', 'Date', 'Originating IP', 'DKIM', 'SHA-256', 'SHA-3-256'];
             const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
             downloadCsvFile(csv, "Email_Report.csv");
@@ -1053,19 +1068,36 @@
         }
 
         function readFile(file) {
-            return new Promise(resolve => {
+            return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result);
+                reader.onerror = () => reject(reader.error || new Error('Unable to read evidence file.'));
+                reader.onabort = () => reject(new Error('Evidence file reading was cancelled.'));
+                reader.onload = e => {
+                    if (typeof e.target?.result !== 'string') {
+                        reject(new Error('Missing evidence text.'));
+                    } else {
+                        resolve(e.target.result);
+                    }
+                };
                 reader.readAsText(file);
             });
         }
 
         async function calculateSHA256(file) {
-            return new Promise(resolve => {
+            return new Promise((resolve, reject) => {
                 const reader = new FileReader();
+                reader.onerror = () => reject(reader.error || new Error('Unable to read evidence file.'));
+                reader.onabort = () => reject(new Error('Evidence file reading was cancelled.'));
                 reader.onload = e => {
-                    const wordArray = CryptoJS.lib.WordArray.create(e.target.result);
-                    resolve(CryptoJS.SHA256(wordArray).toString());
+                    try {
+                        if (!(e.target.result instanceof ArrayBuffer)) {
+                            throw new Error('Missing evidence bytes for SHA-256 calculation.');
+                        }
+                        const wordArray = CryptoJS.lib.WordArray.create(e.target.result);
+                        resolve(CryptoJS.SHA256(wordArray).toString());
+                    } catch (error) {
+                        reject(error);
+                    }
                 };
                 reader.readAsArrayBuffer(file);
             });
