@@ -63,9 +63,9 @@ const sandbox = {
   },
   setTimeout(fn, ms) { timers.push({ fn, ms }); },
 };
-const downloadCsvFile = vm.runInNewContext(
-  extract('function downloadCsvFile(csv, filename) {', 'function downloadSelectedCSV() {') +
-    '\ndownloadCsvFile;', sandbox
+const { downloadBlobFile, downloadCsvFile } = vm.runInNewContext(
+  extract('function downloadBlobFile(blob, filename) {', 'function downloadSelectedCSV() {') +
+    '\n({ downloadBlobFile, downloadCsvFile });', sandbox
 );
 downloadCsvFile('"SHA-3-256","abc"\r\n', 'Hash_Report.csv');
 assert.equal(anchor.href, 'blob:forensic-csv');
@@ -75,4 +75,23 @@ assert.equal(timers.length, 1);
 assert.equal(timers[0].ms, 30000);
 timers[0].fn();
 assert.equal(events.at(-1), 'url-revoked:blob:forensic-csv');
-console.log('Focused header-only EML + deferred CSV export checks passed');
+
+// Word export delegates to the same tested browser-safe blob lifecycle.
+assert.match(html, /downloadBlobFile\(blob, "Hash_Report\.docx"\);/);
+events.length = 0;
+timers.length = 0;
+downloadBlobFile(
+  new sandbox.Blob(['docx'], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  }),
+  'Hash_Report.docx'
+);
+assert.equal(anchor.href, 'blob:forensic-csv');
+assert.equal(anchor.download, 'Hash_Report.docx');
+assert.deepEqual(events, ['url-created', 'attached', 'click', 'remove']);
+assert.equal(timers.length, 1);
+assert.equal(timers[0].ms, 30000);
+timers[0].fn();
+assert.equal(events.at(-1), 'url-revoked:blob:forensic-csv');
+
+console.log('Focused header-only EML + shared CSV/DOCX blob lifecycle checks passed');
