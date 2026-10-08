@@ -742,7 +742,7 @@
                     const cells = tr.querySelectorAll('td');
                     rows.push([
                         cells[1].innerText,
-                        cells[2].innerText,
+                        tr.fileData?.name || cells[2].innerText,
                         cells[4].innerText,
                         cells[5].innerText
                     ]);
@@ -829,7 +829,7 @@
                     rows.push(new TableRow({
                         children: [
                             new TableCell({ children: [new Paragraph(cells[1].innerText)] }),
-                            new TableCell({ children: [new Paragraph(cells[2].innerText)] }),
+                            new TableCell({ children: [new Paragraph(tr.fileData?.name || cells[2].innerText)] }),
                             new TableCell({ children: [new Paragraph({ 
                                 children: [new TextRun({ text: cells[4].innerText, font: "Courier New", size: 18 })]
                             })] }),
@@ -961,7 +961,7 @@
                     const cells = tr.querySelectorAll('td');
                     data.push([
                         cells[1].innerText,
-                        cells[2].innerText,
+                        tr.fileData?.name || cells[2].innerText,
                         cells[3].innerText,
                         cells[4].innerText,
                         cells[5].innerText
