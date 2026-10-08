@@ -748,6 +748,9 @@
 
         // ===== GENERATE HASH PDF =====
         function generateHashPDF() {
+            if (!selectedHashRowsReady(
+                Array.from(document.querySelectorAll("#hashTableBody tr")).filter(tr => tr.querySelector('input').checked)
+            )) return;
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'pt', 'a4');
             
@@ -803,6 +806,9 @@
 
         // ===== GENERATE HASH WORD =====
         function generateHashWord() {
+            if (!selectedHashRowsReady(
+                Array.from(document.querySelectorAll("#hashTableBody tr")).filter(tr => tr.querySelector('input').checked)
+            )) return;
             if (typeof docx === 'undefined') { 
                 alert("Word library loading..."); 
                 return; 
@@ -897,6 +903,24 @@
             });
         }
 
+        // Exports are evidence: never write placeholder or failed digests
+        // into PDF, DOCX, CSV or XLSX as though they were calculated hashes.
+        function selectedHashRowsReady(rows) {
+            for (const row of rows) {
+                const cells = row.querySelectorAll('td');
+                const md5 = cells[3]?.innerText.trim() || '';
+                const sha256 = cells[4]?.innerText.trim() || '';
+                const sha3 = cells[5]?.innerText.trim() || '';
+                if (!/^[a-f0-9]{32}$/i.test(md5) ||
+                    !/^[a-f0-9]{64}$/i.test(sha256) ||
+                    !/^[a-f0-9]{64}$/i.test(sha3)) {
+                    alert('A selected file is still calculating hashes or failed to read. Wait for completion or retry the file before exporting evidence.');
+                    return false;
+                }
+            }
+            return true;
+        }
+
         // ===== DOWNLOAD CSV =====
         function csvCell(value) {
             let text = String(value ?? '');
@@ -915,6 +939,9 @@
         }
 
         function downloadSelectedCSV() {
+            if (!selectedHashRowsReady(
+                Array.from(document.querySelectorAll("#hashTableBody tr")).filter(tr => tr.querySelector('input').checked)
+            )) return;
             const rows = [['#', 'Filename', 'MD5', 'SHA-256', 'SHA-3-256']];
             document.querySelectorAll("#hashTableBody tr").forEach(tr => {
                 if (tr.querySelector('input').checked) {
@@ -949,6 +976,7 @@
                 alert("Please select .EML files from the table.");
                 return;
             }
+            if (!selectedHashRowsReady(selectedRows)) return;
 
             const rows = await Promise.all(selectedRows.map(async (tr, index) => {
                 const cells = tr.querySelectorAll('td');
@@ -973,6 +1001,9 @@
 
         // ===== EXCEL EXPORT =====
         function downloadExcel() {
+            if (!selectedHashRowsReady(
+                Array.from(document.querySelectorAll("#hashTableBody tr")).filter(tr => tr.querySelector('input').checked)
+            )) return;
             if (typeof XLSX === 'undefined') {
                 alert("Excel library loading...");
                 return;
