@@ -578,23 +578,30 @@
 
         // PARSE EML - EXTRACT METADATA ONLY
         function parseEml(text) {
+            const bodyParts = text.split(/\r?\n\r?\n/);
+            // RFC 5322 metadata ends at the first blank line. Body text may
+            // contain lookalike From/Received fields but cannot supply headers.
+            const headerBlock = bodyParts.length > 1 ? bodyParts[0] : '';
+            const headerLines = headerBlock.replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/);
             const getVal = (name) => {
-                const match = text.match(new RegExp(`^${name}:\\s*(.*)$`, 'mi'));
-                return match ? match[1].trim() : "Not Found";
+                const tag = name.toLowerCase() + ':';
+                const line = headerLines.find(value =>
+                    value.slice(0, tag.length).toLowerCase() === tag
+                );
+                return line ? line.slice(tag.length).trim() : "Not Found";
             };
-
-            const ipMatch = text.match(/\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]/);
-            const serverIP = ipMatch ? ipMatch[1] : "Not Traced";
-            // A DKIM-Signature header is only a claim by the sender. Authenticity
-            // requires cryptographic verification against DNS public keys;
-            // this offline metadata parser does NOT perform that verification.
-            // Check the header block only, not arbitrary text in the email body.
-            const headerBlock = text.split(/\r?\n\r?\n/, 1)[0];
-            const dkim = /^DKIM-Signature[ \t]*:/im.test(headerBlock)
+            // First Received hop is unverified transit metadata, not origin.
+            const received = getVal('Received');
+            const match = received.match(/\[((?:\d{1,3}\.){3}\d{1,3})\]/);
+            const octets = match ? match[1].split('.').map(Number) : [];
+            const serverIP = octets.length === 4 && octets.every(value =>
+                Number.isInteger(value) && value >= 0 && value <= 255
+            ) ? match[1] : "Not Traced";
+            const dkim = headerLines.some(line => /^DKIM-Signature[ \t]*:/i.test(line))
                 ? "PRESENT (NOT VERIFIED)"
                 : "NOT PRESENT";
 
-            const bodyParts = text.split(/\r?\n\r?\n/);
+
             let rawBody = bodyParts.length > 1 ? bodyParts.slice(1).join("\n") : "";
             rawBody = rawBody.substring(0, 200).trim();
             if (rawBody.length === 200) rawBody += "...";
@@ -703,7 +710,7 @@
                         ['To', emailData.to],
                         ['Date', emailData.date],
                         ['Message-ID', emailData.messageId],
-                        ['Originating IP', emailData.serverIP],
+                        ['Received Hop IP (Unverified)', emailData.serverIP],
                         ['DKIM Header (Unverified)', emailData.dkim],
                         ['SHA-256 Hash', sha256],
                         ['SHA-3-256 Hash', sha3]
@@ -1015,7 +1022,7 @@
                 logConsole("Email CSV cancelled after an evidence read or processing error.");
                 return;
             }
-            const header = ['#', 'Subject', 'From', 'To', 'Date', 'Originating IP', 'DKIM Header (Unverified)', 'SHA-256', 'SHA-3-256'];
+            const header = ['#', 'Subject', 'From', 'To', 'Date', 'Received Hop IP (Unverified)', 'DKIM Header (Unverified)', 'SHA-256', 'SHA-3-256'];
             const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
             downloadCsvFile(csv, "Email_Report.csv");
             logConsole(`Email CSV exported with ${rows.length} file(s).`);
