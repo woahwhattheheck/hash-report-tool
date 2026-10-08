@@ -584,7 +584,9 @@
             const bodyParts = text.split(/\r?\n\r?\n/);
             // RFC 5322 metadata ends at the first blank line. Body text may
             // contain lookalike From/Received fields but cannot supply headers.
-            const headerBlock = bodyParts.length > 1 ? bodyParts[0] : '';
+            // RFC 5322 permits a header-only message with no body separator.
+            // Parse only the first section, never lookalike fields in the body.
+            const headerBlock = bodyParts[0] || '';
             const headerLines = headerBlock.replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/);
             const getVal = (name) => {
                 const tag = name.toLowerCase() + ':';
@@ -964,8 +966,15 @@
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
+            // A browser can begin the actual file download after the click returns.
+            // Keep the URL alive briefly so CSV export works across browsers.
+            document.body.appendChild(a);
+            try {
+                a.click();
+            } finally {
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 30_000);
+            }
         }
 
         function downloadSelectedCSV() {
