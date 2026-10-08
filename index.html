@@ -780,6 +780,11 @@
             )) return;
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'pt', 'a4');
+            // Four fixed columns must fit the printable landscape page, not the raw page width.
+            const tableMargin = 40;
+            const indexWidth = 36;
+            const filenameWidth = 188;
+            const digestWidth = (doc.internal.pageSize.getWidth() - 2 * tableMargin - indexWidth - filenameWidth) / 2;
             
             doc.setFillColor(0, 51, 102);
             doc.rect(0, 0, 842, 50, 'F');
@@ -818,13 +823,15 @@
                 },
                 bodyStyles: { 
                     fontSize: 9,
-                    font: 'courier'
+                    font: 'courier',
+                    overflow: 'linebreak'
                 },
+                margin: { left: tableMargin, right: tableMargin },
                 columnStyles: {
-                    0: { cellWidth: 40 },
-                    1: { cellWidth: 230 },
-                    2: { cellWidth: 260, font: 'courier' },
-                    3: { cellWidth: 260, font: 'courier' }
+                    0: { cellWidth: indexWidth },
+                    1: { cellWidth: filenameWidth, overflow: 'linebreak' },
+                    2: { cellWidth: digestWidth, font: 'courier', overflow: 'linebreak' },
+                    3: { cellWidth: digestWidth, font: 'courier', overflow: 'linebreak' }
                 }
             });
 
