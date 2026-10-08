@@ -522,8 +522,12 @@
                         <td class="hash-font sha3">Calculating...</td>
                     </tr>
                 `);
-                // Treat local evidence filenames as text, never parsed HTML.
-                document.getElementById(rowId).querySelector('.evidence-filename').textContent = file.name;
+                // Bind the evidence object immediately. Reports may be requested while
+                // this row is still queued for hashing, so deferring fileData until
+                // processQueue() would silently omit selected .eml evidence.
+                const evidenceRow = document.getElementById(rowId);
+                evidenceRow.querySelector('.evidence-filename').textContent = file.name;
+                evidenceRow.fileData = file;
                 fileQueue.push({ file, rowId });
             });
             if (!isProcessing) processQueue();
@@ -535,7 +539,6 @@
             isProcessing = true;
             const { file, rowId } = fileQueue.shift();
             const row = document.getElementById(rowId);
-            if (row) row.fileData = file;
 
             const reader = new FileReader();
             const failHash = () => {
