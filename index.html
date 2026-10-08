@@ -1019,9 +1019,24 @@
         }
 
         async function calculateSHA3(file) {
-            return new Promise(resolve => {
+            return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = e => resolve(sha3_256(e.target.result));
+                // FileReader failures and aborts are asynchronous; without
+                // these callbacks a report awaiting the hash never finishes.
+                reader.onerror = () => reject(reader.error || new Error('Unable to read evidence file.'));
+                reader.onabort = () => reject(new Error('Evidence file reading was cancelled.'));
+                reader.onload = e => {
+                    try {
+                        if (!(e.target.result instanceof ArrayBuffer)) {
+                            throw new Error('Missing evidence bytes for SHA-3 calculation.');
+                        }
+                        resolve(sha3_256(e.target.result));
+                    } catch (error) {
+                        // Exceptions inside onload do not reject the promise
+                        // unless they are explicitly forwarded.
+                        reject(error);
+                    }
+                };
                 reader.readAsArrayBuffer(file);
             });
         }
