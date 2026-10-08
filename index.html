@@ -536,20 +536,42 @@
             if (row) row.fileData = file;
 
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const wordArray = CryptoJS.lib.WordArray.create(e.target.result);
-                setTimeout(() => {
-                    if (row) {
-                        row.querySelector('.md5').innerText = CryptoJS.MD5(wordArray).toString();
-                        row.querySelector('.sha256').innerText = CryptoJS.SHA256(wordArray).toString();
-                        const sha3 = sha3_256(e.target.result);
-                        row.querySelector('.sha3').innerText = sha3;
-                        logConsole(`SHA-3-256 calculated for ${file.name}: ${sha3}`);
+            const failHash = () => {
+                if (row) {
+                    for (const selector of ['.md5', '.sha256', '.sha3']) {
+                        row.querySelector(selector).innerText = 'ERROR';
                     }
-                    processQueue();
+                }
+                logConsole(`Hash calculation failed for ${file.name}. Remove or retry this file.`);
+                // A bad/unreadable file must not block later evidence rows.
+                processQueue();
+            };
+            reader.onerror = failHash;
+            reader.onabort = failHash;
+            reader.onload = function(e) {
+                setTimeout(() => {
+                    try {
+                        const wordArray = CryptoJS.lib.WordArray.create(e.target.result);
+                        if (row) {
+                            const md5 = CryptoJS.MD5(wordArray).toString();
+                            const sha256 = CryptoJS.SHA256(wordArray).toString();
+                            const sha3 = sha3_256(e.target.result);
+                            row.querySelector('.md5').innerText = md5;
+                            row.querySelector('.sha256').innerText = sha256;
+                            row.querySelector('.sha3').innerText = sha3;
+                            logConsole(`SHA-3-256 calculated for ${file.name}: ${sha3}`);
+                        }
+                        processQueue();
+                    } catch (error) {
+                        failHash();
+                    }
                 }, 50);
             };
-            reader.readAsArrayBuffer(file);
+            try {
+                reader.readAsArrayBuffer(file);
+            } catch (error) {
+                failHash();
+            }
         }
 
         // PARSE EML - EXTRACT METADATA ONLY
