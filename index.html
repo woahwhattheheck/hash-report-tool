@@ -946,7 +946,12 @@
         // ===== DOWNLOAD CSV =====
         function csvCell(value) {
             let text = String(value ?? '');
-            if (/^[=+\-@]/.test(text)) text = `'${text}`;
+            // Spreadsheet importers can treat formula prefixes as active even
+            // after leading whitespace/control characters. Tabs and line
+            // breaks are also recognized CSV-injection prefixes on their own.
+            if (/^[\t\r\n]/.test(text) || /^\s*[=+\-@]/.test(text)) {
+                text = `'${text}`;
+            }
             return `"${text.replace(/"/g, '""')}"`;
         }
 
