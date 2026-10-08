@@ -585,7 +585,14 @@
 
             const ipMatch = text.match(/\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]/);
             const serverIP = ipMatch ? ipMatch[1] : "Not Traced";
-            const dkim = text.includes('DKIM-Signature') ? "PASS" : "FAIL";
+            // A DKIM-Signature header is only a claim by the sender. Authenticity
+            // requires cryptographic verification against DNS public keys;
+            // this offline metadata parser does NOT perform that verification.
+            // Check the header block only, not arbitrary text in the email body.
+            const headerBlock = text.split(/\r?\n\r?\n/, 1)[0];
+            const dkim = /^DKIM-Signature[ \t]*:/im.test(headerBlock)
+                ? "PRESENT (NOT VERIFIED)"
+                : "NOT PRESENT";
 
             const bodyParts = text.split(/\r?\n\r?\n/);
             let rawBody = bodyParts.length > 1 ? bodyParts.slice(1).join("\n") : "";
@@ -697,7 +704,7 @@
                         ['Date', emailData.date],
                         ['Message-ID', emailData.messageId],
                         ['Originating IP', emailData.serverIP],
-                        ['DKIM Status', emailData.dkim],
+                        ['DKIM Header (Unverified)', emailData.dkim],
                         ['SHA-256 Hash', sha256],
                         ['SHA-3-256 Hash', sha3]
                     ],
@@ -1008,7 +1015,7 @@
                 logConsole("Email CSV cancelled after an evidence read or processing error.");
                 return;
             }
-            const header = ['#', 'Subject', 'From', 'To', 'Date', 'Originating IP', 'DKIM', 'SHA-256', 'SHA-3-256'];
+            const header = ['#', 'Subject', 'From', 'To', 'Date', 'Originating IP', 'DKIM Header (Unverified)', 'SHA-256', 'SHA-3-256'];
             const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
             downloadCsvFile(csv, "Email_Report.csv");
             logConsole(`Email CSV exported with ${rows.length} file(s).`);
